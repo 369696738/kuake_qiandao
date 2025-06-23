@@ -1,39 +1,81 @@
-name: 夸克网盘自动签到脚本
-
+name: Cloud check in action
 on:
+  push:
+    branches:
+      - main
+  watch:
+    types: started
+  workflow_dispatch:
   schedule:
-    # 定时执行，默认UTC时区， 中国时区需要+8小时， 中国时间每天10:05执行
-    - cron: '5 2 * * *'
-
-  workflow_dispatch:  # 允许手动触发
+    - cron: 35 2 * * *
 jobs:
-
-  run-python:
-    runs-on: ubuntu-latest  # 运行环境：Ubuntu 最新版
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: user
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4  # 检查代码
+      - name: 🔀 random delay 0-300 seconds
+        run: sleep $((RANDOM % 301))
 
-      - name: astral-sh/setup-uv
-        uses: astral-sh/setup-uv@v5
+      - name: 🔌 Check out code
+        uses: actions/checkout@main
+
+      - name: 🔨 Setup Node.js environment
+        uses: actions/setup-node@main
         with:
-          enable-cache: false
-          cache-dependency-glob: false
+          node-version: 18
+          cache: npm
 
+      - name: 👾 Check if Debug is true
+        if: vars.debug == '1'
+        run: |
+          echo "CLOUD189_VERBOSE=1" >> $GITHUB_ENV
+      
+      - name: 📹 Restore cached Cookie
+        id: cache-cookie-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: .token
+          key: ${{ runner.os }}-cache-token
+          restore-keys: ${{ runner.os }}-cache-token-
 
-      - name: Check UV version
-        run: uv --version  # 检查 UV 版本
+      - name: 🔧 Init secrets
+        uses: shine1594/secrets-to-env-action@master
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          secrets_env: production
+          prefix_prod: ""
+          file_name_prod: .env
 
-      - name: Sync dependencies with UV
-        run: uv sync  # 使用 UV 同步依赖
+      - name: 📡 Init dependencies
+        run: npm install
 
-      - name: Run Python script with UV
-        env:
-          QUARK_KPS: ${{ secrets.QUARK_KPS }}
-          QUARK_SIGN: ${{ secrets.QUARK_SIGN }}
-          QUARK_VCODE: ${{ secrets.QUARK_VCODE }}
-          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          EMAIL: ${{ secrets.EMAIL }}
-          PASSWORD: ${{ secrets.PASSWORD }}
-        run: uv run main.py  # 使用 UV 运行 Python 脚本
+      - name: 🚀 Run
+        uses: nick-fields/retry@master
+        with:
+          timeout_minutes: 30
+          max_attempts: 3
+          command: npm start
+      
+      - name: 📹 Save cached Cookie
+        uses: actions/cache/save@v4
+        with:
+          path: .token
+          key: ${{ runner.os }}-cache-token-${{ hashFiles('.token/*.json') }}
+
+      - name: 🚗 Keep Running
+        if: github.event_name == 'schedule'
+        run: |
+          git config --local user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+          git config --local user.name "${{ github.actor }}"
+          git remote set-url origin https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}
+          git pull --rebase --autostash
+          git commit --allow-empty -m "Keep Running..."
+          git push
+
+      - name: 🎉 Delete old workflow run
+        uses: Mattraks/delete-workflow-runs@main
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 50
