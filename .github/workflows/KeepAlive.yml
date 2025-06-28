@@ -2,7 +2,7 @@ name: KeepAlive
 
 on:
   schedule:
-    - cron: '0 16 * * *'  # 每天 UTC 时间 16:00 运行（北京时间 0:00）
+    - cron: '0 16 * * *'  # 每天 UTC 时间 16:00（北京时间 0:00）运行
   workflow_dispatch:       # 允许手动触发
 
 jobs:
@@ -13,17 +13,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Generate random UUID
-        run: echo $(cat /proc/sys/kernel/random/uuid) > .keepalive.txt
+      - name: Generate random UUID with timestamp
+        run: echo "UUID: $(uuidgen) - $(date)" > .keepalive.txt
 
       - name: Commit changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add .keepalive.txt
-          git commit -m "🤖 保活提交：自动更新 UUID" || echo "No changes to commit"
+          git commit -m "🤖 保活提交：自动更新 UUID 和时间戳" || echo "No changes to commit"
 
       - name: Push changes
+        if: always()
         uses: ad-m/github-push-action@v0.8.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref_name }}
