@@ -1,32 +1,29 @@
-name: 'KeepActionAlive'
+name: KeepAlive
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 16 * * *'
+    - cron: '0 16 * * *'  # 每天 UTC 时间 16:00 运行（北京时间 0:00）
+  workflow_dispatch:       # 允许手动触发
 
 jobs:
-  auto_renew:
+  keepalive:
     runs-on: ubuntu-latest
+
     steps:
-      - name: 'Checkout codes'
+      - name: Checkout repository
         uses: actions/checkout@v4
-      
-      - name: 'Avoid Github Workflow being suspended'
-        run: echo $(cat /proc/sys/kernel/random/uuid) > UUID.txt
-      
-      - name: 'Commit Files'
-        id: commit
+
+      - name: Generate random UUID
+        run: echo $(cat /proc/sys/kernel/random/uuid) > .keepalive.txt
+
+      - name: Commit changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add .
-          git diff --quiet && git diff --staged --quiet || git commit -am '是否继续白嫖：[是] —— 继续白嫖成功！'
-          echo "status=success" >> $GITHUB_OUTPUT
-           
-      - name: 'GitHub Push'
-        if: steps.commit.outputs.status != 'success'
+          git add .keepalive.txt
+          git commit -m "🤖 保活提交：自动更新 UUID" || echo "No changes to commit"
+
+      - name: Push changes
         uses: ad-m/github-push-action@v0.8.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref }}
